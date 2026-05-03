@@ -527,6 +527,10 @@ let pagador = '', tipo = '';
   if (n1) document.getElementById('nombre1').value = n1;
   if (n2) document.getElementById('nombre2').value = n2;
   updateBtnNames();
+  // URL hardcodeada — funciona en cualquier dispositivo sin configuración
+  if (!localStorage.getItem('scriptUrl')) {
+    localStorage.setItem('scriptUrl', 'https://script.google.com/macros/s/AKfycbzb2wvb6DsM2CsvWyGd-QHAjHUUdUUkNoguWkRAAxESHTr6h5Y_arybHCriHiYQvj0/exec');
+  }
   updateStatus();
   renderHist();
 })();
