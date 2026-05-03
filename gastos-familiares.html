@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#ffffff" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Gastos" />
+  <title>Gastos del Hogar</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg:       #f8fafc;
+      --surface:  #ffffff;
+      --surface2: #f1f5f9;
+      --border:   #e2e8f0;
+      --border2:  #cbd5e1;
+      --accent:   #0284c7;
+      --accent2:  #6366f1;
+      --ok:       #059669;
+      --warn:     #ea580c;
+      --text:     #0f172a;
+      --muted:    #64748b;
+      --radius:   14px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* HEADER */
+    header {
+      padding: 16px 20px 12px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0;
+      background: var(--surface);
+      z-index: 10;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    }
+    .logo { font-size: 18px; font-weight: 700; letter-spacing: -0.5px; }
+    .logo span { color: var(--accent); }
+    .month-badge {
+      font-family: 'DM Mono', monospace; font-size: 12px;
+      color: var(--muted); background: var(--surface2);
+      padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border);
+    }
+
+    /* TABS */
+    .tabs {
+      display: flex; padding: 0 16px; gap: 4px;
+      border-bottom: 1px solid var(--border); background: var(--surface);
+    }
+    .tab {
+      flex: 1; padding: 12px 0; border: none; background: none;
+      color: var(--muted); font-family: 'DM Sans', sans-serif;
+      font-size: 13px; font-weight: 500; cursor: pointer;
+      border-bottom: 2px solid transparent; transition: color .2s, border-color .2s;
+    }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    /* VIEWS */
+    .view { display: none; flex: 1; flex-direction: column; overflow-y: auto; }
+    .view.active { display: flex; }
+
+    /* FORM */
+    .form-wrap { padding: 18px 16px 36px; display: flex; flex-direction: column; gap: 14px; }
+    .field { display: flex; flex-direction: column; gap: 5px; }
+    label {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.8px; color: var(--muted);
+    }
+    input, select {
+      background: var(--surface); border: 1.5px solid var(--border);
+      border-radius: var(--radius); color: var(--text);
+      font-family: 'DM Sans', sans-serif; font-size: 16px;
+      padding: 13px 16px; width: 100%; outline: none;
+      transition: border-color .2s, box-shadow .2s;
+      -webkit-appearance: none; appearance: none;
+    }
+    input:focus, select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(2,132,199,0.1);
+    }
+    select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2364748b' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 16px center; padding-right: 40px;
+    }
+    input[type="date"] { font-family: 'DM Mono', monospace; font-size: 15px; }
+    input[type="date"]::-webkit-calendar-picker-indicator { opacity: .5; cursor: pointer; }
+    input[type="number"] { font-family: 'DM Mono', monospace; font-size: 24px; font-weight: 600; }
+    .monto-wrap { position: relative; }
+    .monto-prefix {
+      position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
+      font-family: 'DM Mono', monospace; font-size: 24px; font-weight: 600;
+      color: var(--muted); pointer-events: none;
+    }
+    .monto-wrap input { padding-left: 38px; }
+
+    .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+    /* TIPO */
+    .toggle-group { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
+    .toggle-btn {
+      border: 1.5px solid var(--border); background: var(--surface);
+      border-radius: var(--radius); color: var(--muted);
+      font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500;
+      padding: 11px 4px; cursor: pointer; transition: all .2s; text-align: center;
+    }
+    .toggle-btn.sel-comun    { background: #e0f2fe; border-color: var(--accent);  color: var(--accent); }
+    .toggle-btn.sel-personal { background: #ede9fe; border-color: var(--accent2); color: var(--accent2); }
+    .toggle-btn.sel-revisar  { background: #fff7ed; border-color: var(--warn);    color: var(--warn); }
+
+    /* PAGADO POR */
+    .paid-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .paid-btn {
+      border: 1.5px solid var(--border); background: var(--surface);
+      border-radius: var(--radius); color: var(--muted);
+      font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 500;
+      padding: 13px; cursor: pointer; transition: all .2s;
+      display: flex; flex-direction: column; align-items: center; gap: 3px;
+    }
+    .paid-btn .icon { font-size: 20px; }
+    .paid-btn.sel-g { background: #e0f2fe; border-color: var(--accent); color: var(--accent); }
+    .paid-btn.sel-e { background: #dcfce7; border-color: var(--ok);     color: var(--ok); }
+
+    /* SUBMIT */
+    .btn-submit {
+      width: 100%; padding: 16px; background: var(--accent); color: #fff;
+      border: none; border-radius: var(--radius); font-family: 'DM Sans', sans-serif;
+      font-size: 16px; font-weight: 700; cursor: pointer;
+      transition: opacity .2s, transform .1s; margin-top: 6px;
+    }
+    .btn-submit:active { transform: scale(0.98); opacity: .9; }
+    .btn-submit:disabled { opacity: .4; cursor: default; }
+
+    /* TOAST */
+    .toast {
+      position: fixed; bottom: 28px; left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: var(--ok); color: #fff; font-weight: 600; font-size: 14px;
+      padding: 12px 24px; border-radius: 40px;
+      transition: transform .35s cubic-bezier(.34,1.56,.64,1);
+      z-index: 100; white-space: nowrap; pointer-events: none;
+      box-shadow: 0 4px 16px rgba(0,0,0,.15);
+    }
+    .toast.show  { transform: translateX(-50%) translateY(0); }
+    .toast.error { background: var(--warn); }
+
+    /* HISTORIAL */
+    .hist-wrap { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+    .hist-header { display: flex; justify-content: space-between; align-items: center; padding: 4px 0 8px; }
+    .hist-title { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; }
+    .hist-count { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); }
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 13px 15px;
+      display: flex; gap: 11px; align-items: flex-start;
+      animation: slideIn .22s ease; box-shadow: 0 1px 3px rgba(0,0,0,.04);
+    }
+    @keyframes slideIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+    .card-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; flex-shrink: 0; }
+    .dot-comun    { background: var(--accent); }
+    .dot-personal { background: var(--accent2); }
+    .dot-revisar  { background: var(--warn); }
+    .card-body { flex: 1; min-width: 0; }
+    .card-concept { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .card-cat  { font-size: 12px; color: var(--accent); font-weight: 500; margin-top: 1px; }
+    .card-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .badge {
+      display: inline-block; font-size: 10px; font-weight: 700;
+      padding: 2px 7px; border-radius: 20px; text-transform: uppercase;
+      letter-spacing: .5px; margin-top: 4px;
+    }
+    .badge-comun    { background: #e0f2fe; color: var(--accent); }
+    .badge-personal { background: #ede9fe; color: var(--accent2); }
+    .badge-revisar  { background: #fff7ed; color: var(--warn); }
+    .card-right { text-align: right; flex-shrink: 0; }
+    .card-amount { font-family: 'DM Mono', monospace; font-size: 15px; font-weight: 600; }
+    .card-who { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
+    .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
+    .empty-state p { font-size: 14px; line-height: 1.5; }
+
+    /* CONFIG */
+    .config-wrap { padding: 20px 16px; display: flex; flex-direction: column; gap: 20px; }
+    .config-section { display: flex; flex-direction: column; gap: 10px; }
+    .config-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); }
+    .config-row {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 13px 16px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .config-label { font-size: 14px; }
+    .config-value { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--accent); }
+    .btn-config {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); color: var(--text);
+      font-family: 'DM Sans', sans-serif; font-size: 14px;
+      padding: 13px 16px; cursor: pointer; width: 100%; text-align: left;
+      transition: border-color .2s;
+    }
+    .config-note {
+      font-size: 12px; color: var(--muted); line-height: 1.6;
+      padding: 12px 14px; background: var(--surface2);
+      border: 1px dashed var(--border2); border-radius: var(--radius);
+    }
+    .config-row input {
+      background: none; border: none; text-align: right;
+      width: 130px; font-family: 'DM Mono',monospace;
+      font-size: 13px; color: var(--accent); padding: 0; box-shadow: none;
+    }
+    .status-dot { width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:6px; }
+    .status-ok   { background: var(--ok); }
+    .status-warn { background: var(--warn); }
+
+    /* MODAL */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(15,23,42,.45); z-index: 50; align-items: flex-end;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--surface); border-radius: 20px 20px 0 0;
+      padding: 24px 20px 44px; width: 100%;
+      border-top: 1px solid var(--border); animation: slideUp .28s ease;
+    }
+    @keyframes slideUp { from { transform:translateY(60px); opacity:0; } to { transform:translateY(0); opacity:1; } }
+    .modal-title { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+    .modal-desc  { font-size: 13px; color: var(--muted); margin-bottom: 16px; line-height: 1.5; }
+    .modal-actions { display: flex; gap: 10px; margin-top: 16px; }
+    .btn-cancel {
+      flex:1; padding:14px; background:none; border:1.5px solid var(--border);
+      border-radius:var(--radius); color:var(--muted);
+      font-family:'DM Sans',sans-serif; font-size:15px; cursor:pointer;
+    }
+    .btn-save {
+      flex:2; padding:14px; background:var(--accent); border:none;
+      border-radius:var(--radius); color:#fff;
+      font-family:'DM Sans',sans-serif; font-size:15px; font-weight:700; cursor:pointer;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Gastos<span>.</span></div>
+  <div class="month-badge" id="monthBadge"></div>
+</header>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('form',this)">➕ Nuevo</button>
+  <button class="tab" onclick="switchTab('hist',this)">📋 Historial</button>
+  <button class="tab" onclick="switchTab('config',this)">⚙️ Config</button>
+</div>
+
+<!-- ══ FORM ══ -->
+<div class="view active" id="view-form">
+  <div class="form-wrap">
+
+    <div class="field">
+      <label>Fecha</label>
+      <input type="date" id="fecha" />
+    </div>
+
+    <div class="field">
+      <label>Monto</label>
+      <div class="monto-wrap">
+        <span class="monto-prefix">$</span>
+        <input type="number" id="monto" inputmode="decimal" placeholder="0" step="0.01" min="0" />
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Concepto</label>
+      <input type="text" id="concepto" placeholder="ej: supermercado, expensas, nafta…" autocomplete="off" />
+    </div>
+
+    <div class="row-2">
+      <div class="field">
+        <label>Categoría</label>
+        <select id="categoria" onchange="onCatChange()">
+          <option value="">Seleccionar…</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Sub Categoría</label>
+        <select id="subcategoria">
+          <option value="">—</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Medio de pago</label>
+      <select id="medio" onchange="onMedioChange()">
+        <option value="">Seleccionar…</option>
+        <option>Tarjeta de Crédito</option>
+        <option>Débito</option>
+        <option>Efectivo</option>
+        <option>Transferencia</option>
+      </select>
+    </div>
+
+    <div class="field" id="field-venc" style="display:none">
+      <label>Vencimiento del resumen</label>
+      <select id="venc">
+        <option value="">Seleccionar mes…</option>
+      </select>
+    </div>
+
+    <div class="field" id="field-cuotas" style="display:none">
+      <label>Cuotas</label>
+      <select id="cuotas">
+        <option value="1">Sin cuotas (pago único)</option>
+        <option value="2">2 cuotas</option>
+        <option value="3">3 cuotas</option>
+        <option value="6">6 cuotas</option>
+        <option value="12">12 cuotas</option>
+        <option value="18">18 cuotas</option>
+        <option value="24">24 cuotas</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>Pagado por</label>
+      <div class="paid-group">
+        <button class="paid-btn" id="btn-g" onclick="setPagador('Gonzalo')">
+          <span class="icon">👨</span>Gonzalo
+        </button>
+        <button class="paid-btn" id="btn-e" onclick="setPagador('Eugenia')">
+          <span class="icon">👩</span>Eugenia
+        </button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Tipo</label>
+      <div class="toggle-group">
+        <button class="toggle-btn" id="tipo-comun"    onclick="setTipo('Común')">🏠 Común</button>
+        <button class="toggle-btn" id="tipo-personal" onclick="setTipo('Personal')">👤 Personal</button>
+        <button class="toggle-btn" id="tipo-revisar"  onclick="setTipo('Revisar')">🔍 Revisar</button>
+      </div>
+    </div>
+
+    <button class="btn-submit" id="btnSubmit" onclick="enviarGasto()">Registrar gasto</button>
+
+  </div>
+</div>
+
+<!-- ══ HISTORIAL ══ -->
+<div class="view" id="view-hist">
+  <div class="hist-wrap">
+    <div class="hist-header">
+      <span class="hist-title">Este mes</span>
+      <span class="hist-count" id="histCount">0 registros</span>
+    </div>
+    <div id="histList"></div>
+  </div>
+</div>
+
+<!-- ══ CONFIG ══ -->
+<div class="view" id="view-config">
+  <div class="config-wrap">
+
+    <div class="config-section">
+      <div class="config-title">Google Sheets</div>
+      <div class="config-row">
+        <span class="config-label">
+          <span class="status-dot" id="statusDot"></span>Estado conexión
+        </span>
+        <span class="config-value" id="statusText">Sin configurar</span>
+      </div>
+      <button class="btn-config" onclick="openModal()">🔗 Configurar URL del script</button>
+      <div class="config-note">
+        Publicá el Apps Script como aplicación web (Ejecutar como: yo · Acceso: Cualquiera). Pegá la URL arriba.
+      </div>
+    </div>
+
+    <div class="config-section">
+      <div class="config-title">Nombres</div>
+      <div class="config-row">
+        <span class="config-label">Usuario 1</span>
+        <input id="nombre1" value="Gonzalo" onchange="saveNames()" />
+      </div>
+      <div class="config-row">
+        <span class="config-label">Usuario 2</span>
+        <input id="nombre2" value="Eugenia" onchange="saveNames()" />
+      </div>
+    </div>
+
+    <div class="config-section">
+      <div class="config-title">Apps Script — pegá este código exacto</div>
+      <div class="config-note" style="font-family:'DM Mono',monospace;font-size:11px;line-height:1.7;user-select:all;white-space:pre-wrap">function doPost(e) {
+  var data = JSON.parse(e.postData.contents);
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName("Gastos")
+    || ss.insertSheet("Gastos");
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow([
+      "Fecha","Monto","Concepto",
+      "Categoría","Sub Categoría",
+      "Medio","Pagado por","Tipo",
+      "Mes imputado","Cuotas"
+    ]);
+  }
+  sheet.appendRow([
+    data.fecha, data.monto, data.concepto,
+    data.categoria, data.subcategoria,
+    data.medio, data.pagadoPor,
+    data.tipo, data.mesImputado,
+    data.cuotas || 1
+  ]);
+  return ContentService
+    .createTextOutput(JSON.stringify({ok:true}))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+function doGet() {
+  return ContentService
+    .createTextOutput("OK")
+    .setMimeType(ContentService.MimeType.TEXT);
+}</div>
+    </div>
+
+    <div class="config-section">
+      <div class="config-title">Datos locales</div>
+      <button class="btn-config" onclick="exportLocal()" style="color:var(--accent)">📤 Exportar historial (JSON)</button>
+      <button class="btn-config" onclick="clearLocal()"  style="color:var(--warn)">🗑 Borrar historial local</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══ MODAL ══ -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModalOutside(event)">
+  <div class="modal">
+    <div class="modal-title">URL del Apps Script</div>
+    <div class="modal-desc">Pegá la URL que obtenés al publicar el script como aplicación web.</div>
+    <input type="url" id="scriptUrl" placeholder="https://script.google.com/macros/s/…/exec" style="font-size:13px;padding:12px 14px;" />
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
+      <button class="btn-save"   onclick="saveUrl()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ════════ CATEGORÍAS ════════
+const CATS = {
+  "Gastos San Ramón": [
+    "Expensas","Luz","Gas","Internet","Starlink",
+    "Seguro de Hogar","Jardinero","Mantenimiento",
+    "Cosas casa","Proveedores","Cloro"
+  ],
+  "Servicios": [
+    "Niñera","Anticipos Niñera","SAC Niñera","Viáticos Niñera",
+    "ART Niñera","Contador","Niñera nocturna","Extras"
+  ],
+  "Helena & Amelia": [
+    "Saint Mary","Saint Mary Matrículas","Comedor","Kiosko",
+    "Logística","Gimnasia DOJO","Rollers","Teatro AME",
+    "Cerámica","MaterCell","MaterCell HZ","Extras"
+  ],
+  "Consumo": [
+    "Supermercado","Carne/Pescado","Verdulería","Dietética",
+    "Agua Potable","Farmacia","Pañales","Ropa Chicas","Libros","Extras"
+  ],
+  "Autos": ["Seguro Nissan","Seguro Yaris","Extras"],
+  "Recreación": [
+    "Cuota Social Mapuche","Restaurantes","Entretenimiento",
+    "Eventos","Tenis gon","Colonia","Masajes","Extras","Vacaciones"
+  ],
+  "Suscripciones": [
+    "Caja Seguridad","Spotify","YouTube","Flow","Netflix",
+    "Google","Disney+","HBO MAX","Extras","Impuestos"
+  ],
+  "Compras/Spot": ["Regalos","Extras"],
+  "Gastos Casuarinas": [
+    "Expensas LOTE","ARBA","Partida Municipal 210203",
+    "Luz","Gas","Internet","Starlink","Seguro de Hogar",
+    "Jardinero","Mantenimiento","Cosas casa","Proveedores","Cloro","Extras"
+  ],
+  "Obras CASA": ["Extras"]
+};
+
+const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+               'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+let pagador = '', tipo = '';
+
+// ════════ INIT ════════
+(function init() {
+  const hoy = new Date();
+  document.getElementById('fecha').value = toInputDate(hoy);
+  document.getElementById('monthBadge').textContent = MESES[hoy.getMonth()] + ' ' + hoy.getFullYear();
+
+  // Poblar categorías
+  const catSel = document.getElementById('categoria');
+  Object.keys(CATS).forEach(c => {
+    const o = document.createElement('option');
+    o.value = o.textContent = c;
+    catSel.appendChild(o);
+  });
+
+  // Poblar vencimiento
+  const vencSel = document.getElementById('venc');
+  for (let i = 0; i < 4; i++) {
+    const d = new Date(hoy.getFullYear(), hoy.getMonth() + i, 1);
+    const o = document.createElement('option');
+    o.value = o.textContent = MESES[d.getMonth()] + ' ' + d.getFullYear();
+    vencSel.appendChild(o);
+  }
+
+  // Nombres guardados
+  const n1 = localStorage.getItem('nombre1'), n2 = localStorage.getItem('nombre2');
+  if (n1) document.getElementById('nombre1').value = n1;
+  if (n2) document.getElementById('nombre2').value = n2;
+  updateBtnNames();
+  updateStatus();
+  renderHist();
+})();
+
+// ════════ UTILS ════════
+function toInputDate(d) {
+  return d.getFullYear() + '-' +
+    String(d.getMonth()+1).padStart(2,'0') + '-' +
+    String(d.getDate()).padStart(2,'0');
+}
+function fmtFecha(iso) {
+  const [y,m,d] = iso.split('-'); return `${d}/${m}/${y}`;
+}
+function mesDesFecha(iso) {
+  const [y,m] = iso.split('-'); return MESES[parseInt(m,10)-1] + ' ' + y;
+}
+function calcMesImputado(medio, venc, fechaIso) {
+  return medio === 'Tarjeta de Crédito' ? (venc || mesDesFecha(fechaIso)) : mesDesFecha(fechaIso);
+}
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+function fmtNum(n) { return Number(n).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function slug(t) { return t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+
+// ════════ TABS ════════
+function switchTab(id, btn) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('view-'+id).classList.add('active');
+  btn.classList.add('active');
+  if (id === 'hist') renderHist();
+}
+
+// ════════ CATEGORÍAS ════════
+function onCatChange() {
+  const cat = document.getElementById('categoria').value;
+  const sub = document.getElementById('subcategoria');
+  sub.innerHTML = '<option value="">Seleccionar…</option>';
+  (CATS[cat] || []).forEach(s => {
+    const o = document.createElement('option');
+    o.value = o.textContent = s;
+    sub.appendChild(o);
+  });
+}
+
+// ════════ MEDIO ════════
+function onMedioChange() {
+  const isCC = document.getElementById('medio').value === 'Tarjeta de Crédito';
+  document.getElementById('field-venc').style.display   = isCC ? '' : 'none';
+  document.getElementById('field-cuotas').style.display = isCC ? '' : 'none';
+}
+
+// ════════ PAGADOR / TIPO ════════
+function getNombre1() { return document.getElementById('nombre1').value || 'Gonzalo'; }
+function getNombre2() { return document.getElementById('nombre2').value || 'Eugenia'; }
+
+function setPagador(who) {
+  pagador = who;
+  document.getElementById('btn-g').className = 'paid-btn' + (who === getNombre1() ? ' sel-g' : '');
+  document.getElementById('btn-e').className = 'paid-btn' + (who === getNombre2() ? ' sel-e' : '');
+}
+function setTipo(t) {
+  tipo = t;
+  document.getElementById('tipo-comun').className    = 'toggle-btn' + (t==='Común'    ? ' sel-comun'    : '');
+  document.getElementById('tipo-personal').className = 'toggle-btn' + (t==='Personal' ? ' sel-personal' : '');
+  document.getElementById('tipo-revisar').className  = 'toggle-btn' + (t==='Revisar'  ? ' sel-revisar'  : '');
+}
+
+// ════════ ENVIAR ════════
+async function enviarGasto() {
+  const fechaVal  = document.getElementById('fecha').value;
+  const monto     = parseFloat(document.getElementById('monto').value);
+  const concepto  = document.getElementById('concepto').value.trim();
+  const categoria = document.getElementById('categoria').value;
+  const subcat    = document.getElementById('subcategoria').value;
+  const medio     = document.getElementById('medio').value;
+  const cuotas    = parseInt(document.getElementById('cuotas').value) || 1;
+  const venc      = document.getElementById('venc').value;
+
+  if (!fechaVal)             { showToast('Seleccioná una fecha', true); return; }
+  if (!monto || monto <= 0)  { showToast('Ingresá un monto válido', true); return; }
+  if (!concepto)             { showToast('Ingresá un concepto', true); return; }
+  if (!categoria)            { showToast('Seleccioná una categoría', true); return; }
+  if (!medio)                { showToast('Seleccioná el medio de pago', true); return; }
+  if (!pagador)              { showToast('Seleccioná quién pagó', true); return; }
+  if (!tipo)                 { showToast('Seleccioná el tipo de gasto', true); return; }
+  if (medio === 'Tarjeta de Crédito' && !venc) { showToast('Seleccioná el vencimiento del resumen', true); return; }
+
+  const registro = {
+    fecha: fmtFecha(fechaVal), monto, concepto, categoria,
+    subcategoria: subcat, medio, pagadoPor: pagador, tipo,
+    mesImputado: calcMesImputado(medio, venc, fechaVal), cuotas
+  };
+
+  // Guardar local
+  const hist = getHist();
+  hist.unshift({ ...registro, id: Date.now() });
+  localStorage.setItem('gastosHist', JSON.stringify(hist));
+
+  // Enviar a Sheets
+  const url = localStorage.getItem('scriptUrl');
+  const btn = document.getElementById('btnSubmit');
+  btn.disabled = true; btn.textContent = 'Enviando…';
+
+  let ok = false;
+  if (url) {
+    try {
+      await fetch(url, {
+        method: 'POST', mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(registro)
+      });
+      ok = true;
+    } catch(e) {}
+  }
+
+  resetForm();
+  btn.disabled = false; btn.textContent = 'Registrar gasto';
+
+  if (!url)     showToast('✓ Guardado local (configurá Sheets)', false);
+  else if (ok)  showToast('✓ Registrado en Sheets');
+  else          showToast('✓ Guardado local (sin internet)');
+}
+
+// ════════ RESET ════════
+function resetForm() {
+  document.getElementById('fecha').value = toInputDate(new Date());
+  document.getElementById('monto').value = '';
+  document.getElementById('concepto').value = '';
+  document.getElementById('categoria').value = '';
+  document.getElementById('subcategoria').innerHTML = '<option value="">—</option>';
+  document.getElementById('medio').value = '';
+  document.getElementById('cuotas').value = '1';
+  document.getElementById('venc').value = '';
+  document.getElementById('field-venc').style.display = 'none';
+  document.getElementById('field-cuotas').style.display = 'none';
+  pagador = ''; tipo = '';
+  document.querySelectorAll('.paid-btn').forEach(b => b.className = 'paid-btn');
+  document.querySelectorAll('.toggle-btn').forEach(b => b.className = 'toggle-btn');
+}
+
+// ════════ HISTORIAL ════════
+function getHist() {
+  try { return JSON.parse(localStorage.getItem('gastosHist') || '[]'); } catch { return []; }
+}
+function renderHist() {
+  const hist = getHist();
+  const now = new Date();
+  const mesActual = MESES[now.getMonth()] + ' ' + now.getFullYear();
+  const filtered = hist.filter(r => r.mesImputado === mesActual);
+  document.getElementById('histCount').textContent = filtered.length + ' registros';
+  const list = document.getElementById('histList');
+  if (!filtered.length) {
+    list.innerHTML = `<div class="empty-state"><div class="icon">💸</div><p>No hay gastos registrados<br>para este mes todavía.</p></div>`;
+    return;
+  }
+  list.innerHTML = filtered.map(r => {
+    const s = slug(r.tipo || 'comun');
+    const cuotasTxt = r.cuotas > 1 ? ` · ${r.cuotas} ctas` : '';
+    const catTxt = r.subcategoria ? `${esc(r.categoria)} › ${esc(r.subcategoria)}` : esc(r.categoria||'');
+    return `<div class="card">
+      <div class="card-dot dot-${s}"></div>
+      <div class="card-body">
+        <div class="card-concept">${esc(r.concepto)}</div>
+        ${catTxt ? `<div class="card-cat">${catTxt}</div>` : ''}
+        <div class="card-meta">${esc(r.fecha)} · ${esc(r.medio)}${cuotasTxt}</div>
+        <span class="badge badge-${s}">${esc(r.tipo)}</span>
+      </div>
+      <div class="card-right">
+        <div class="card-amount">$${fmtNum(r.monto)}</div>
+        <div class="card-who">${esc(r.pagadoPor)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ════════ CONFIG ════════
+function updateStatus() {
+  const url = localStorage.getItem('scriptUrl');
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusText');
+  if (url) { dot.className='status-dot status-ok'; txt.textContent='Conectado'; txt.style.color='var(--ok)'; }
+  else     { dot.className='status-dot status-warn'; txt.textContent='Sin configurar'; txt.style.color='var(--warn)'; }
+}
+function saveNames() {
+  localStorage.setItem('nombre1', getNombre1());
+  localStorage.setItem('nombre2', getNombre2());
+  updateBtnNames();
+}
+function updateBtnNames() {
+  document.getElementById('btn-g').innerHTML = `<span class="icon">👨</span>${getNombre1()}`;
+  document.getElementById('btn-e').innerHTML = `<span class="icon">👩</span>${getNombre2()}`;
+}
+function exportLocal() {
+  const blob = new Blob([localStorage.getItem('gastosHist')||'[]'], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'gastos-' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+}
+function clearLocal() {
+  if (confirm('¿Borrar todo el historial local? No se puede deshacer.')) {
+    localStorage.removeItem('gastosHist');
+    renderHist();
+    showToast('Historial borrado');
+  }
+}
+
+// ════════ MODAL ════════
+function openModal() { document.getElementById('scriptUrl').value = localStorage.getItem('scriptUrl')||''; document.getElementById('modalOverlay').classList.add('open'); }
+function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); }
+function closeModalOutside(e) { if (e.target===document.getElementById('modalOverlay')) closeModal(); }
+function saveUrl() {
+  const url = document.getElementById('scriptUrl').value.trim();
+  if (url) { localStorage.setItem('scriptUrl', url); updateStatus(); showToast('URL guardada ✓'); }
+  closeModal();
+}
+
+// ════════ TOAST ════════
+function showToast(msg, isError=false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast' + (isError ? ' error' : '');
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+</script>
+</body>
+</html>
