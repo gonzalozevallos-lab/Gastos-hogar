@@ -397,8 +397,29 @@ async function fetchGastos() {
   return _cache;
 }
 function invalidateCache() { _cache = null; }
-function filtrarMes(g,mes) { return g.filter(r=>r.mesImputado===mes); }
-function filtrarAnio(g,anio) { return g.filter(r=>String(r.mesImputado||'').endsWith(String(anio))); }
+function normalizarMes(val) {
+  if (!val) return '';
+  var s = String(val).trim();
+  // Si viene como fecha larga tipo "Fri May 01 2026..." o "2026-05-01..."
+  var mesesEN = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+  var mesesES = MESES;
+  // Intentar parsear como fecha JS
+  var d = new Date(s);
+  if (!isNaN(d.getTime()) && s.length > 6) {
+    return mesesES[d.getMonth()] + ' ' + d.getFullYear();
+  }
+  // Buscar nombre de mes en español (cualquier capitalización)
+  for (var i=0; i<mesesES.length; i++) {
+    var re = new RegExp(mesesES[i], 'i');
+    if (re.test(s)) {
+      var y = s.match(/\d{4}/);
+      return mesesES[i] + (y ? ' '+y[0] : '');
+    }
+  }
+  return s;
+}
+function filtrarMes(g,mes) { return g.filter(r=>normalizarMes(r.mesImputado)===mes); }
+function filtrarAnio(g,anio) { return g.filter(r=>normalizarMes(r.mesImputado).endsWith(String(anio))); }
 function soloComunes(g) { return g.filter(r=>r.tipo==='Común'||r.tipo==='Comun'); }
 
 // ════════ UTILS ════════
@@ -580,7 +601,7 @@ async function loadAnual() {
   if (!del_anio.length) { el.innerHTML=emptyState('📭',`No hay gastos registrados para ${anio}.`); return; }
 
   // Meses del año que tienen datos
-  const mesesConDatos = [...new Set(del_anio.map(r=>r.mesImputado))];
+  const mesesConDatos = [...new Set(del_anio.map(r=>normalizarMes(r.mesImputado)))];
   const mesesOrdenados = MESES.map(m=>m+' '+anio).filter(m=>mesesConDatos.includes(m));
 
   // Datos por mes
