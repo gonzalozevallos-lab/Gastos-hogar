@@ -358,7 +358,7 @@ function showApp() {
   document.getElementById('loginScreen').style.display='none';
   document.getElementById('appShell').style.display='flex';
   initSelectors();
-  loadResumen();
+  fetchIngresos().then(() => loadResumen());
 }
 
 // ════════ SELECTORES ════════
@@ -426,8 +426,35 @@ function soloComunes(g) { return g.filter(r=>r.tipo==='Común'||r.tipo==='Comun'
 function fmtN(n) { return Number(n||0).toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:0}); }
 function esc(s)  { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
 function sum(arr,fn) { return arr.reduce((s,r)=>s+(fn?fn(r):r),0); }
-function getIng(mes) { try{ const d=JSON.parse(localStorage.getItem('ingresos')||'{}'); return d[mes]||{g:0,e:0}; }catch{return{g:0,e:0};} }
-function saveIng(mes,g,e) { const d=JSON.parse(localStorage.getItem('ingresos')||'{}'); d[mes]={g:parseFloat(g)||0,e:parseFloat(e)||0}; localStorage.setItem('ingresos',JSON.stringify(d)); }
+// Cache de ingresos (se carga desde Sheet)
+let _ingCache = null;
+async function fetchIngresos() {
+  if (_ingCache) return _ingCache;
+  try {
+    const res = await fetch(SCRIPT_URL+'?action=getIngresos');
+    const data = await res.json();
+    _ingCache = {};
+    (data.ingresos||[]).forEach(r => { _ingCache[r.mes] = {g:parseFloat(r.g)||0, e:parseFloat(r.e)||0}; });
+  } catch(e) { _ingCache = {}; }
+  return _ingCache;
+}
+function invalidateIngCache() { _ingCache = null; }
+function getIng(mes) {
+  // Usa cache si está disponible, sino devuelve 0
+  if (_ingCache && _ingCache[mes]) return _ingCache[mes];
+  return {g:0, e:0};
+}
+async function saveIng(mes,g,e) {
+  // Guardar en Sheet
+  await fetch(SCRIPT_URL, {
+    method: 'POST', mode: 'no-cors',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({action:'saveIngresos', mes, g:parseFloat(g)||0, e:parseFloat(e)||0})
+  });
+  // Actualizar cache local
+  if (!_ingCache) _ingCache = {};
+  _ingCache[mes] = {g:parseFloat(g)||0, e:parseFloat(e)||0};
+}
 function parseMes(str) { const p=str.split(' '); const i=MESES.indexOf(p[0]); return {m:i>=0?i:0,y:parseInt(p[1])||2000}; }
 function ordenarMeses(meses) { return [...meses].sort((a,b)=>{ const pa=parseMes(a),pb=parseMes(b); return (pb.y*12+pb.m)-(pa.y*12+pa.m); }); }
 
@@ -807,10 +834,11 @@ function loadIngresos() {
   renderIngHistorial();
 }
 
-function guardarIngresos(mes) {
+async function guardarIngresos(mes) {
   const g=parseFloat(document.getElementById('ingG').value)||0;
   const e=parseFloat(document.getElementById('ingE').value)||0;
-  saveIng(mes,g,e); invalidateCache();
+  await saveIng(mes,g,e);
+  invalidateCache();
   showToast('Ingresos guardados ✓');
   renderIngHistorial();
 }
@@ -818,7 +846,7 @@ function guardarIngresos(mes) {
 function renderIngHistorial() {
   const el=document.getElementById('ingHistorial');
   if(!el) return;
-  const data=JSON.parse(localStorage.getItem('ingresos')||'{}');
+  const data = _ingCache || {};
   const meses=Object.keys(data).sort((a,b)=>{ const pa=parseMes(a),pb=parseMes(b); return (pb.y*12+pb.m)-(pa.y*12+pa.m); });
   if(!meses.length) return;
   const filas=meses.map(m=>{
