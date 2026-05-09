@@ -690,7 +690,7 @@ function renderHist() {
     const s = slug(r.tipo || 'comun');
     const cuotasTxt = r.cuotas > 1 ? ` · ${r.cuotas} ctas` : '';
     const catTxt = r.subcategoria ? `${esc(r.categoria)} › ${esc(r.subcategoria)}` : esc(r.categoria||'');
-    return `<div class="card">
+    return `<div class="card" id="card-${r.id}">
       <div class="card-dot dot-${s}"></div>
       <div class="card-body">
         <div class="card-concept">${esc(r.concepto)}</div>
@@ -701,9 +701,42 @@ function renderHist() {
       <div class="card-right">
         <div class="card-amount">$${fmtNum(r.monto)}</div>
         <div class="card-who">${esc(r.pagadoPor)}</div>
+        <button onclick="borrarGasto(${r.id}, '${esc(r.concepto)}')" style="
+          margin-top:6px; background:none; border:1px solid #fca5a5;
+          border-radius:8px; color:#ef4444; font-size:11px; font-weight:600;
+          padding:3px 8px; cursor:pointer; font-family:'DM Sans',sans-serif;">
+          🗑 Borrar
+        </button>
       </div>
     </div>`;
   }).join('');
+}
+
+async function borrarGasto(id, concepto) {
+  if (!confirm(`¿Borrar "${concepto}"?\n\nEsto lo elimina del historial local y del Google Sheet.`)) return;
+
+  // Borrar del localStorage
+  const hist = getHist().filter(r => r.id !== id);
+  localStorage.setItem('gastosHist', JSON.stringify(hist));
+
+  // Borrar del Sheet
+  const url = localStorage.getItem('scriptUrl');
+  if (url) {
+    try {
+      await fetch(url, {
+        method: 'POST', mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'deleteGasto', id })
+      });
+    } catch(e) {}
+  }
+
+  // Animar y sacar la card
+  const card = document.getElementById('card-' + id);
+  if (card) { card.style.opacity = '0'; card.style.transition = 'opacity .3s'; setTimeout(() => renderHist(), 300); }
+  else renderHist();
+
+  showToast('Gasto eliminado');
 }
 
 // ════════ CONFIG ════════
