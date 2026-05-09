@@ -399,16 +399,42 @@
     </div>
 
     <div class="config-section">
-      <div class="config-title">Apps Script — versión completa vigente</div>
-      <div class="config-note" style="font-family:'DM Mono',monospace;font-size:10px;line-height:1.6;user-select:all;white-space:pre-wrap">Ver el archivo apps-script.js en el repositorio.
-Incluye: doPost (saveIngresos, deleteGasto, nuevo gasto con cuotas) y doGet (getGastos, getIngresos).
-URL: https://github.com/gonzalozevallos-lab/Gastos-hogar</div>
+      <div class="config-title">Apps Script — pegá este código exacto</div>
+      <div class="config-note" style="font-family:'DM Mono',monospace;font-size:11px;line-height:1.7;user-select:all;white-space:pre-wrap">function doPost(e) {
+  var data = JSON.parse(e.postData.contents);
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName("Gastos")
+    || ss.insertSheet("Gastos");
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow([
+      "Fecha","Monto","Concepto",
+      "Categoría","Sub Categoría",
+      "Medio","Pagado por","Tipo",
+      "Mes imputado","Cuotas"
+    ]);
+  }
+  sheet.appendRow([
+    data.fecha, data.monto, data.concepto,
+    data.categoria, data.subcategoria,
+    data.medio, data.pagadoPor,
+    data.tipo, data.mesImputado,
+    data.cuotas || 1
+  ]);
+  return ContentService
+    .createTextOutput(JSON.stringify({ok:true}))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+function doGet() {
+  return ContentService
+    .createTextOutput("OK")
+    .setMimeType(ContentService.MimeType.TEXT);
+}</div>
     </div>
 
     <div class="config-section">
-      <div class="config-title">Configuración local</div>
-      <button class="btn-config" onclick="clearLocal()" style="color:var(--warn)">🗑 Limpiar configuración local</button>
-      <div class="config-note">Solo borra la URL y nombres guardados en este dispositivo. No afecta el Google Sheet.</div>
+      <div class="config-title">Datos locales</div>
+      <button class="btn-config" onclick="exportLocal()" style="color:var(--accent)">📤 Exportar historial (JSON)</button>
+      <button class="btn-config" onclick="clearLocal()"  style="color:var(--warn)">🗑 Borrar historial local</button>
     </div>
 
   </div>
@@ -574,7 +600,6 @@ function getNombre2() { return document.getElementById('nombre2').value || 'Euge
 
 function setPagador(who) {
   pagador = who;
-  // Fix #9: comparar con getNombre1/2 en el momento de clic para respetar cambios dinámicos
   document.getElementById('btn-g').className = 'paid-btn' + (who === getNombre1() ? ' sel-g' : '');
   document.getElementById('btn-e').className = 'paid-btn' + (who === getNombre2() ? ' sel-e' : '');
 }
@@ -586,7 +611,6 @@ function setTipo(t) {
 }
 
 // ════════ ENVIAR ════════
-// Fix #8: se eliminó el guardado en localStorage. La fuente de verdad es siempre el Sheet.
 async function enviarGasto() {
   const fechaVal  = document.getElementById('fecha').value;
   const monto     = parseFloat(document.getElementById('monto').value);
@@ -612,30 +636,34 @@ async function enviarGasto() {
     mesImputado: calcMesImputado(medio, venc, fechaVal), cuotas
   };
 
+  // Guardar local
+  const hist = getHist();
+  hist.unshift({ ...registro, id: Date.now() });
+  localStorage.setItem('gastosHist', JSON.stringify(hist));
+
+  // Enviar a Sheets
   const url = localStorage.getItem('scriptUrl');
   const btn = document.getElementById('btnSubmit');
   btn.disabled = true; btn.textContent = 'Enviando…';
 
-  if (!url) {
-    btn.disabled = false; btn.textContent = 'Registrar gasto';
-    showToast('Configurá la URL del script en Config', true);
-    return;
+  let ok = false;
+  if (url) {
+    try {
+      await fetch(url, {
+        method: 'POST', mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(registro)
+      });
+      ok = true;
+    } catch(e) {}
   }
 
-  try {
-    await fetch(url, {
-      method: 'POST', mode: 'no-cors',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(registro)
-    });
-    resetForm();
-    btn.disabled = false; btn.textContent = 'Registrar gasto';
-    const cuotasLabel = cuotas > 1 ? ` (${cuotas} cuotas)` : '';
-    showToast(`✓ Registrado en Sheets${cuotasLabel}`);
-  } catch(err) {
-    btn.disabled = false; btn.textContent = 'Registrar gasto';
-    showToast('Error al enviar. Verificá tu conexión.', true);
-  }
+  resetForm();
+  btn.disabled = false; btn.textContent = 'Registrar gasto';
+
+  if (!url)     showToast('✓ Guardado local (configurá Sheets)', false);
+  else if (ok)  showToast('✓ Registrado en Sheets');
+  else          showToast('✓ Guardado local (sin internet)');
 }
 
 // ════════ RESET ════════
@@ -656,11 +684,11 @@ function resetForm() {
 }
 
 // ════════ HISTORIAL ════════
-// Fix #8: el historial siempre lee del Sheet (nunca localStorage).
 function initMesHist() {
   const sel = document.getElementById('mesHist');
   if (!sel || sel.options.length > 0) return;
   const now = new Date();
+  // 18 meses futuros + mes actual + 18 meses pasados
   for (let i = -18; i <= 18; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const v = MESES[d.getMonth()] + ' ' + d.getFullYear();
@@ -707,8 +735,6 @@ async function renderHist() {
     const tipoSlug = slug(r.tipo || 'comun');
     const cuotasTxt = r.cuotas > 1 ? ` · ${r.cuotas} ctas` : '';
     const catTxt = r.subcategoria ? `${esc(r.categoria)} › ${esc(r.subcategoria)}` : esc(r.categoria||'');
-    // Fix #7: pasar rowIndex al borrador para identificación precisa
-    const rowIdx = r.rowIndex || 0;
     return `<div class="card" id="card-${idx}">
       <div class="card-dot dot-${tipoSlug}"></div>
       <div class="card-body">
@@ -720,49 +746,30 @@ async function renderHist() {
       <div class="card-right">
         <div class="card-amount">$${fmtNum(r.monto)}</div>
         <div class="card-who">${esc(r.pagadoPor)}</div>
-        <button onclick="borrarGasto(${idx}, '${esc(r.concepto)}', '${esc(String(r.monto))}', ${rowIdx})" style="margin-top:6px;background:none;border:1px solid #fca5a5;border-radius:8px;color:#ef4444;font-size:11px;font-weight:600;padding:3px 8px;cursor:pointer;font-family:'DM Sans',sans-serif;">🗑 Borrar</button>
+        <button onclick="borrarGasto(${idx}, '${esc(r.concepto)}', '${esc(String(r.monto))}')" style="margin-top:6px;background:none;border:1px solid #fca5a5;border-radius:8px;color:#ef4444;font-size:11px;font-weight:600;padding:3px 8px;cursor:pointer;font-family:'DM Sans',sans-serif;">🗑 Borrar</button>
       </div>
     </div>`;
   }).join('');
 }
 
-// Fix #7: borrarGasto usa rowIndex para identificación precisa.
-// Ya no usa mode:'no-cors' porque necesitamos leer la respuesta para confirmar el borrado.
-// El toast de éxito se muestra solo si el servidor confirma ok:true.
-async function borrarGasto(idx, concepto, monto, rowIndex) {
+async function borrarGasto(idx, concepto, monto) {
   if (!confirm(`¿Borrar "${concepto}"?\n\nEsto lo elimina del Google Sheet.`)) return;
 
   const url = localStorage.getItem('scriptUrl');
-  if (!url) { showToast('Sin URL configurada', true); return; }
-
-  const card = document.getElementById('card-' + idx);
-  if (card) card.style.opacity = '0.4';
-
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'deleteGasto', concepto, monto, rowIndex })
-    });
-    const data = await res.json();
-    if (data.ok) {
-      showToast('Gasto eliminado ✓');
-    } else if (data.error === 'mismatch') {
-      showToast('El gasto cambió en el sheet. Recargá el historial.', true);
-      if (card) card.style.opacity = '1';
-      return;
-    } else {
-      showToast('No se encontró el gasto en el Sheet', true);
-      if (card) card.style.opacity = '1';
-      return;
-    }
-  } catch(e) {
-    showToast('Error al eliminar. Verificá tu conexión.', true);
-    if (card) card.style.opacity = '1';
-    return;
+  if (url) {
+    try {
+      await fetch(url, {
+        method: 'POST', mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'deleteGasto', concepto, monto })
+      });
+    } catch(e) {}
   }
 
-  setTimeout(() => renderHist(), 350);
+  const card = document.getElementById('card-' + idx);
+  if (card) { card.style.opacity='0'; card.style.transition='opacity .3s'; setTimeout(()=>renderHist(),350); }
+  else renderHist();
+  showToast('Gasto eliminado');
 }
 
 // ════════ CONFIG ════════
@@ -773,25 +780,27 @@ function updateStatus() {
   if (url) { dot.className='status-dot status-ok'; txt.textContent='Conectado'; txt.style.color='var(--ok)'; }
   else     { dot.className='status-dot status-warn'; txt.textContent='Sin configurar'; txt.style.color='var(--warn)'; }
 }
-// Fix #9: saveNames actualiza los botones y también refresca el estado de pagador seleccionado
 function saveNames() {
   localStorage.setItem('nombre1', getNombre1());
   localStorage.setItem('nombre2', getNombre2());
   updateBtnNames();
-  // Si hay un pagador seleccionado, re-aplicar para que los colores reflejen los nuevos nombres
-  if (pagador) setPagador(pagador);
 }
 function updateBtnNames() {
   document.getElementById('btn-g').innerHTML = `<span class="icon">👨</span>${getNombre1()}`;
   document.getElementById('btn-e').innerHTML = `<span class="icon">👩</span>${getNombre2()}`;
 }
-// Fix #8: exportLocal ya no tiene sentido sin localStorage de gastos — se elimina.
-// clearLocal solo limpia scriptUrl/nombres, no un historial que ya no existe localmente.
+function exportLocal() {
+  const blob = new Blob([localStorage.getItem('gastosHist')||'[]'], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'gastos-' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+}
 function clearLocal() {
-  if (confirm('¿Limpiar la configuración local (URL, nombres guardados)?\nEsto NO afecta el Google Sheet.')) {
-    localStorage.removeItem('nombre1');
-    localStorage.removeItem('nombre2');
-    showToast('Configuración local limpiada');
+  if (confirm('¿Borrar todo el historial local? No se puede deshacer.')) {
+    localStorage.removeItem('gastosHist');
+    renderHist();
+    showToast('Historial borrado');
   }
 }
 
