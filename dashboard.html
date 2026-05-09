@@ -366,14 +366,15 @@ function initSelectors() {
   const now = new Date();
   const year = now.getFullYear();
 
-  // Meses (últimos 18)
+  // Meses (18 futuros + mes actual + 18 pasados)
   ['mesResumen','mesCategorias','mesIngresos'].forEach(id => {
     const sel = document.getElementById(id);
     sel.innerHTML = '';
-    for (let i=0; i<18; i++) {
+    for (let i=-18; i<=18; i++) {
       const d = new Date(year, now.getMonth()-i, 1);
       const v = MESES[d.getMonth()]+' '+d.getFullYear();
       const o = document.createElement('option'); o.value=v; o.textContent=v;
+      if (i===0) o.selected=true;
       sel.appendChild(o);
     }
   });

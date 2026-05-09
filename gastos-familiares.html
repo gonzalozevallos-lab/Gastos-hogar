@@ -515,7 +515,7 @@ let pagador = '', tipo = '';
 
   // Poblar vencimiento
   const vencSel = document.getElementById('venc');
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 18; i++) {
     const d = new Date(hoy.getFullYear(), hoy.getMonth() + i, 1);
     const o = document.createElement('option');
     o.value = o.textContent = MESES[d.getMonth()] + ' ' + d.getFullYear();
@@ -688,11 +688,13 @@ function initMesHist() {
   const sel = document.getElementById('mesHist');
   if (!sel || sel.options.length > 0) return;
   const now = new Date();
-  for (let i = 0; i < 18; i++) {
+  // 18 meses futuros + mes actual + 18 meses pasados
+  for (let i = -18; i <= 18; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const v = MESES[d.getMonth()] + ' ' + d.getFullYear();
     const o = document.createElement('option');
     o.value = v; o.textContent = v;
+    if (i === 0) o.selected = true;
     sel.appendChild(o);
   }
 }
