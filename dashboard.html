@@ -683,39 +683,53 @@ async function loadAnual() {
   const totalE      = acum[acum.length-1]?.acumE||0;
   const compAcumG   = acum[acum.length-1]?.acumCompG||0;
 
-  // ── Gráfico de línea SVG ──
-  const svgHeight=160, svgWidth=320, padL=40, padR=10, padT=14, padB=28;
-  const maxY = Math.max(...acum.map(a=>a.acumTotal),1);
-  const maxYG= Math.max(...acum.map(a=>a.acumG),1);
-  const maxYE= Math.max(...acum.map(a=>a.acumE),1);
-  const maxAll = Math.max(maxY,maxYG,maxYE);
-  const W=svgWidth-padL-padR, H=svgHeight-padT-padB;
-  const xPos = i => padL + (acum.length>1 ? i/(acum.length-1)*W : W/2);
-  const yPos = v => padT + H - (v/maxAll)*H;
-
-  function polyline(arr, valueFn, color, dash='') {
-    const pts = arr.map((a,i)=>`${xPos(i).toFixed(1)},${yPos(valueFn(a)).toFixed(1)}`).join(' ');
-    return `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" ${dash?`stroke-dasharray="${dash}"`:''} />`;
+  // ── Gráfico de barras verticales — gasto total por mes ──
+  // Tomar hasta 18 meses con datos hacia atrás desde el año seleccionado
+  const now = new Date();
+  const todasMeses = [];
+  for (let i = 17; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    todasMeses.push(MESES[d.getMonth()] + ' ' + d.getFullYear());
   }
-  function dots(arr, valueFn, color) {
-    return arr.map((a,i)=>`<circle cx="${xPos(i).toFixed(1)}" cy="${yPos(valueFn(a)).toFixed(1)}" r="3" fill="${color}" stroke="white" stroke-width="1.5"/>`).join('');
-  }
+  const mesesGrafico = todasMeses.filter(m => {
+    const del = filtrarMes(g, m);
+    return del.length > 0;
+  });
+  const valoresGrafico = mesesGrafico.map(m => sum(filtrarMes(g,m), r=>r.monto));
+  const maxBar = Math.max(...valoresGrafico, 1);
 
-  // Etiquetas eje X
-  const xLabels = acum.map((a,i)=>`<text x="${xPos(i).toFixed(1)}" y="${svgHeight-4}" text-anchor="middle" class="line-label">${a.mes.split(' ')[0].slice(0,3)}</text>`).join('');
+  const svgH=180, svgW=340, padL=44, padR=10, padT=14, padB=32;
+  const W=svgW-padL-padR, H=svgH-padT-padB;
+  const n=mesesGrafico.length;
+  const barW = n>0 ? Math.min(28, (W/n)*0.65) : 20;
+  const gap  = n>1 ? W/(n-1) : W;
 
-  // Etiqueta valor último punto
-  const lastIdx = acum.length-1;
-  const lastValLabel = lastIdx>=0 ? `<text x="${(xPos(lastIdx)+4).toFixed(1)}" y="${(yPos(acum[lastIdx].acumTotal)-4).toFixed(1)}" class="line-value">$${fmtN(acum[lastIdx].acumTotal)}</text>` : '';
+  const bars = mesesGrafico.map((m,i)=>{
+    const v = valoresGrafico[i];
+    const bH = (v/maxBar)*H;
+    const x = n>1 ? padL + i*gap - barW/2 : padL + W/2 - barW/2;
+    const y = padT + H - bH;
+    const isActual = m === MESES[now.getMonth()]+' '+now.getFullYear();
+    return `
+      <rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW}" height="${bH.toFixed(1)}"
+        rx="3" fill="${isActual?'#0284c7':'#93c5fd'}" />
+      <text x="${(x+barW/2).toFixed(1)}" y="${(y-4).toFixed(1)}" text-anchor="middle"
+        class="line-value" style="font-size:8px">$${fmtN(v)}</text>
+      <text x="${(x+barW/2).toFixed(1)}" y="${(svgH-4).toFixed(1)}" text-anchor="middle"
+        class="line-label">${m.split(' ')[0].slice(0,3)}</text>`;
+  }).join('');
+
+  // Líneas guía horizontales
+  const guides = [0.25,0.5,0.75,1].map(p=>{
+    const y = (padT + H - p*H).toFixed(1);
+    return `<line x1="${padL}" y1="${y}" x2="${svgW-padR}" y2="${y}" stroke="#e2e8f0" stroke-width="1"/>
+      <text x="${(padL-4).toFixed(1)}" y="${y}" text-anchor="end" class="line-label" dominant-baseline="middle">$${fmtN(maxBar*p)}</text>`;
+  }).join('');
 
   const svgContent = `
-    <svg viewBox="0 0 ${svgWidth} ${svgHeight}" xmlns="http://www.w3.org/2000/svg">
-      ${polyline(acum,a=>a.acumTotal,'#0284c7')}
-      ${polyline(acum,a=>a.acumG,'#0284c7','4 2')}
-      ${polyline(acum,a=>a.acumE,'#059669','4 2')}
-      ${dots(acum,a=>a.acumTotal,'#0284c7')}
-      ${xLabels}
-      ${lastValLabel}
+    <svg viewBox="0 0 ${svgW} ${svgH}" xmlns="http://www.w3.org/2000/svg">
+      ${guides}
+      ${bars}
     </svg>`;
 
   // ── Tabla resumen mensual ──
@@ -778,14 +792,13 @@ async function loadAnual() {
       </div>
     </div>
 
-    <!-- Gráfico línea -->
+    <!-- Gráfico barras -->
     <div class="line-chart-wrap">
-      <div class="chart-title">Evolución acumulada ${anio}</div>
+      <div class="chart-title">Gasto total por mes — últimos 18 meses</div>
       ${svgContent}
       <div class="legend">
-        <div class="legend-item"><div class="legend-dot" style="background:#0284c7"></div>Total acumulado</div>
-        <div class="legend-item"><div class="legend-dot" style="background:#0284c7;opacity:.5"></div>${NOMBRE1} acum.</div>
-        <div class="legend-item"><div class="legend-dot" style="background:#059669;opacity:.5"></div>${NOMBRE2} acum.</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#0284c7"></div>Mes actual</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#93c5fd"></div>Meses anteriores</div>
       </div>
     </div>
 
