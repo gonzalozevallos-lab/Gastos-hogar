@@ -672,36 +672,68 @@ function resetForm() {
 }
 
 // ════════ HISTORIAL ════════
-function getHist() {
-  try { return JSON.parse(localStorage.getItem('gastosHist') || '[]'); } catch { return []; }
+let _gastosCache = null;
+
+async function fetchGastosApp() {
+  const url = localStorage.getItem('scriptUrl');
+  if (!url) return [];
+  try {
+    const res = await fetch(url + '?action=getGastos');
+    const data = await res.json();
+    _gastosCache = data.gastos || [];
+    return _gastosCache;
+  } catch(e) { return _gastosCache || []; }
 }
-function renderHist() {
-  const hist = getHist();
+
+function normalizarMesApp(val) {
+  if (!val) return '';
+  const s = String(val).trim();
+  const d = new Date(s);
+  if (!isNaN(d.getTime()) && s.length > 6) return MESES[d.getMonth()] + ' ' + d.getFullYear();
+  for (let i=0; i<MESES.length; i++) {
+    if (s.toLowerCase().indexOf(MESES[i].toLowerCase()) !== -1) {
+      const y = s.match(/\d{4}/);
+      return MESES[i] + (y ? ' '+y[0] : '');
+    }
+  }
+  return s;
+}
+
+async function renderHist() {
   const now = new Date();
   const mesActual = MESES[now.getMonth()] + ' ' + now.getFullYear();
-  const filtered = hist.filter(r => r.mesImputado === mesActual);
-  document.getElementById('histCount').textContent = filtered.length + ' registros';
   const list = document.getElementById('histList');
+  const countEl = document.getElementById('histCount');
+
+  list.innerHTML = '<div style="text-align:center;padding:24px;color:var(--muted);font-size:13px">Cargando…</div>';
+
+  const gastos = await fetchGastosApp();
+  const filtered = gastos.filter(r => normalizarMesApp(r.mesImputado) === mesActual);
+
+  countEl.textContent = filtered.length + ' registros';
+
   if (!filtered.length) {
     list.innerHTML = `<div class="empty-state"><div class="icon">💸</div><p>No hay gastos registrados<br>para este mes todavía.</p></div>`;
     return;
   }
-  list.innerHTML = filtered.map(r => {
-    const s = slug(r.tipo || 'comun');
+
+  list.innerHTML = filtered.map((r, idx) => {
+    const tipoSlug = slug(r.tipo || 'comun');
     const cuotasTxt = r.cuotas > 1 ? ` · ${r.cuotas} ctas` : '';
     const catTxt = r.subcategoria ? `${esc(r.categoria)} › ${esc(r.subcategoria)}` : esc(r.categoria||'');
-    return `<div class="card" id="card-${r.id}">
-      <div class="card-dot dot-${s}"></div>
+    const rowId = r.id || r.concepto + '_' + idx;
+    return `<div class="card" id="card-${idx}">
+      <div class="card-dot dot-${tipoSlug}"></div>
       <div class="card-body">
         <div class="card-concept">${esc(r.concepto)}</div>
         ${catTxt ? `<div class="card-cat">${catTxt}</div>` : ''}
         <div class="card-meta">${esc(r.fecha)} · ${esc(r.medio)}${cuotasTxt}</div>
-        <span class="badge badge-${s}">${esc(r.tipo)}</span>
+        <span class="badge badge-${tipoSlug}">${esc(r.tipo)}</span>
       </div>
       <div class="card-right">
         <div class="card-amount">$${fmtNum(r.monto)}</div>
         <div class="card-who">${esc(r.pagadoPor)}</div>
-        <button onclick="borrarGasto(${r.id}, '${esc(r.concepto)}')" style="
+        <button onclick="borrarGasto(${idx}, '${esc(r.concepto)}')" style="
           margin-top:6px; background:none; border:1px solid #fca5a5;
           border-radius:8px; color:#ef4444; font-size:11px; font-weight:600;
           padding:3px 8px; cursor:pointer; font-family:'DM Sans',sans-serif;">
@@ -712,27 +744,26 @@ function renderHist() {
   }).join('');
 }
 
-async function borrarGasto(id, concepto) {
-  if (!confirm(`¿Borrar "${concepto}"?\n\nEsto lo elimina del historial local y del Google Sheet.`)) return;
+async function borrarGasto(idx, concepto) {
+  if (!confirm(`¿Borrar "${concepto}"?\n\nEsto lo elimina del Google Sheet.`)) return;
 
-  // Borrar del localStorage
-  const hist = getHist().filter(r => r.id !== id);
-  localStorage.setItem('gastosHist', JSON.stringify(hist));
-
-  // Borrar del Sheet
   const url = localStorage.getItem('scriptUrl');
-  if (url) {
-    try {
-      await fetch(url, {
-        method: 'POST', mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'deleteGasto', id })
-      });
-    } catch(e) {}
+  if (url && _gastosCache) {
+    const registro = _gastosCache.filter(r => normalizarMesApp(r.mesImputado) === MESES[new Date().getMonth()] + ' ' + new Date().getFullYear())[idx];
+    if (registro) {
+      try {
+        await fetch(url, {
+          method: 'POST', mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'deleteGasto', concepto: registro.concepto, fecha: registro.fecha, monto: registro.monto })
+        });
+      } catch(e) {}
+    }
   }
 
-  // Animar y sacar la card
-  const card = document.getElementById('card-' + id);
+  // Invalidar cache y rerenderizar
+  _gastosCache = null;
+  const card = document.getElementById('card-' + idx);
   if (card) { card.style.opacity = '0'; card.style.transition = 'opacity .3s'; setTimeout(() => renderHist(), 300); }
   else renderHist();
 
