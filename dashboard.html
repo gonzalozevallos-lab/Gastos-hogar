@@ -277,7 +277,10 @@
 <div id="appShell">
   <header>
     <div class="logo">Dashboard<span>.</span></div>
-    <button class="btn-logout" onclick="logout()">Salir</button>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="btn-logout" onclick="refreshDashboard()" id="btnRefresh">🔄 Actualizar</button>
+      <button class="btn-logout" onclick="logout()">Salir</button>
+    </div>
   </header>
   <div class="tabs">
     <button class="tab active" onclick="switchTab('resumen',this)">📊 Resumen</button>
@@ -388,11 +391,26 @@ function initSelectors() {
   }
 }
 
+async function refreshDashboard() {
+  const btn = document.getElementById('btnRefresh');
+  btn.textContent = '⏳ Cargando…';
+  btn.disabled = true;
+  _cache = null;
+  _ingCache = null;
+  await fetchIngresos();
+  // Recargar la vista activa
+  const activeTab = document.querySelector('.tab.active');
+  if (activeTab) activeTab.click();
+  btn.textContent = '🔄 Actualizar';
+  btn.disabled = false;
+  showToast('Datos actualizados ✓');
+}
+
 // ════════ CACHE + FETCH ════════
 let _cache = null;
 async function fetchGastos() {
   if (_cache) return _cache;
-  const res = await fetch(SCRIPT_URL+'?action=getGastos');
+  const res = await fetch(SCRIPT_URL+'?action=getGastos&t='+Date.now(), {cache:'no-store'});
   const data = await res.json();
   _cache = (data.gastos||[]).map(r => ({...r, monto: parseFloat(r.monto||0)}));
   return _cache;
@@ -432,7 +450,7 @@ let _ingCache = null;
 async function fetchIngresos() {
   if (_ingCache) return _ingCache;
   try {
-    const res = await fetch(SCRIPT_URL+'?action=getIngresos');
+    const res = await fetch(SCRIPT_URL+'?action=getIngresos&t='+Date.now(), {cache:'no-store'});
     const data = await res.json();
     _ingCache = {};
     (data.ingresos||[]).forEach(r => { _ingCache[r.mes] = {g:parseFloat(r.g)||0, e:parseFloat(r.e)||0}; });
