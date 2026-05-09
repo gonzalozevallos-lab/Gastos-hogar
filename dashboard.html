@@ -386,10 +386,10 @@ function initSelectors() {
     }
   });
 
-  // Años
+  // Años (6 años hacia atrás para cubrir datos históricos)
   const anioSel = document.getElementById('anioAnual');
   anioSel.innerHTML = '';
-  for (let y=year; y>=year-3; y--) {
+  for (let y=year; y>=year-6; y--) {
     const o = document.createElement('option'); o.value=y; o.textContent=y;
     anioSel.appendChild(o);
   }
@@ -657,16 +657,19 @@ async function loadAnual() {
   // Datos por mes
   const porMes = {};
   mesesOrdenados.forEach(mes=>{
-    const del = filtrarMes(del_anio, mes);
+    const del    = filtrarMes(del_anio, mes);
     const comunes = soloComunes(del);
-    const rep = calcReparto(del_anio.length?g:[], mes);
+    // Fix #5: calcReparto recibe g completo para leer todos los gastos del mes
+    // (incluyendo eventuales registros fuera del rango del año, aunque raro).
+    // pagG/pagE se recalculan localmente sobre del para consistencia con del_anio.
+    const rep = calcReparto(g, mes);
     porMes[mes] = {
-      total:    sum(del,r=>r.monto),
-      comun:    sum(comunes,r=>r.monto),
-      pagG:     sum(del.filter(r=>r.pagadoPor===NOMBRE1),r=>r.monto),
-      pagE:     sum(del.filter(r=>r.pagadoPor===NOMBRE2),r=>r.monto),
-      diffG:    rep.diffG,
-      cats:     agruparCats(del)
+      total: sum(del, r=>r.monto),
+      comun: sum(comunes, r=>r.monto),
+      pagG:  rep.pagG,
+      pagE:  rep.pagE,
+      diffG: rep.diffG,
+      cats:  agruparCats(del)
     };
   });
 
@@ -683,18 +686,10 @@ async function loadAnual() {
   const totalE      = acum[acum.length-1]?.acumE||0;
   const compAcumG   = acum[acum.length-1]?.acumCompG||0;
 
-  // ── Gráfico de barras verticales — gasto total por mes ──
-  // Tomar hasta 18 meses con datos hacia atrás desde el año seleccionado
-  const now = new Date();
-  const todasMeses = [];
-  for (let i = 17; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    todasMeses.push(MESES[d.getMonth()] + ' ' + d.getFullYear());
-  }
-  const mesesGrafico = todasMeses.filter(m => {
-    const del = filtrarMes(g, m);
-    return del.length > 0;
-  });
+  // ── Gráfico de barras verticales — gasto total por mes del año seleccionado ──
+  // Fix #4: usar los meses del año seleccionado (no siempre "hoy")
+  const nowRef = new Date();
+  const mesesGrafico = MESES.map(m => m + ' ' + anio).filter(m => filtrarMes(g, m).length > 0);
   const valoresGrafico = mesesGrafico.map(m => sum(filtrarMes(g,m), r=>r.monto));
   const maxBar = Math.max(...valoresGrafico, 1);
 
@@ -709,7 +704,7 @@ async function loadAnual() {
     const bH = (v/maxBar)*H;
     const x = n>1 ? padL + i*gap - barW/2 : padL + W/2 - barW/2;
     const y = padT + H - bH;
-    const isActual = m === MESES[now.getMonth()]+' '+now.getFullYear();
+    const isActual = m === MESES[nowRef.getMonth()]+' '+nowRef.getFullYear();
     return `
       <rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW}" height="${bH.toFixed(1)}"
         rx="3" fill="${isActual?'#0284c7':'#93c5fd'}" />
@@ -794,7 +789,7 @@ async function loadAnual() {
 
     <!-- Gráfico barras -->
     <div class="line-chart-wrap">
-      <div class="chart-title">Gasto total por mes — últimos 18 meses</div>
+      <div class="chart-title">Gasto total por mes — ${anio}</div>
       ${svgContent}
       <div class="legend">
         <div class="legend-item"><div class="legend-dot" style="background:#0284c7"></div>Mes actual</div>
@@ -875,6 +870,8 @@ async function guardarIngresos(mes) {
   const e=parseFloat(document.getElementById('ingE').value)||0;
   await saveIng(mes,g,e);
   invalidateCache();
+  invalidateIngCache(); // Fix #3: también invalidar caché de ingresos
+  await fetchIngresos(); // recargar ingresos actualizados antes de renderizar
   showToast('Ingresos guardados ✓');
   renderIngHistorial();
 }
