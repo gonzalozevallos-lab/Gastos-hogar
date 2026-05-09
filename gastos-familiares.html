@@ -361,7 +361,7 @@
 <div class="view" id="view-hist">
   <div class="hist-wrap">
     <div class="hist-header">
-      <span class="hist-title">Este mes</span>
+      <select id="mesHist" onchange="renderHist()" style="background:var(--surface);border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;padding:6px 28px 6px 10px;outline:none;-webkit-appearance:none;appearance:none;"></select>
       <span class="hist-count" id="histCount">0 registros</span>
     </div>
     <div id="histList"></div>
@@ -553,6 +553,18 @@ function calcMesImputado(medio, venc, fechaIso) {
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
 function fmtNum(n) { return Number(n).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function slug(t) { return t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+function normalizarMesApp(val) {
+  if (!val) return '';
+  const s = String(val).trim();
+  const d = new Date(s);
+  if (!isNaN(d.getTime()) && s.length > 6) return MESES[d.getMonth()] + ' ' + d.getFullYear();
+  for (let i=0; i<MESES.length; i++) {
+    if (s.toLowerCase().indexOf(MESES[i].toLowerCase()) !== -1) {
+      const y = s.match(/\d{4}/); return MESES[i] + (y ? ' '+y[0] : '');
+    }
+  }
+  return s;
+}
 
 // ════════ TABS ════════
 function switchTab(id, btn) {
@@ -672,48 +684,48 @@ function resetForm() {
 }
 
 // ════════ HISTORIAL ════════
-let _gastosCache = null;
-
-async function fetchGastosApp() {
-  const url = localStorage.getItem('scriptUrl');
-  if (!url) return [];
-  try {
-    const res = await fetch(url + '?action=getGastos');
-    const data = await res.json();
-    _gastosCache = data.gastos || [];
-    return _gastosCache;
-  } catch(e) { return _gastosCache || []; }
-}
-
-function normalizarMesApp(val) {
-  if (!val) return '';
-  const s = String(val).trim();
-  const d = new Date(s);
-  if (!isNaN(d.getTime()) && s.length > 6) return MESES[d.getMonth()] + ' ' + d.getFullYear();
-  for (let i=0; i<MESES.length; i++) {
-    if (s.toLowerCase().indexOf(MESES[i].toLowerCase()) !== -1) {
-      const y = s.match(/\d{4}/);
-      return MESES[i] + (y ? ' '+y[0] : '');
-    }
+function initMesHist() {
+  const sel = document.getElementById('mesHist');
+  if (!sel || sel.options.length > 0) return;
+  const now = new Date();
+  for (let i = 0; i < 18; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const v = MESES[d.getMonth()] + ' ' + d.getFullYear();
+    const o = document.createElement('option');
+    o.value = v; o.textContent = v;
+    sel.appendChild(o);
   }
-  return s;
 }
 
 async function renderHist() {
-  const now = new Date();
-  const mesActual = MESES[now.getMonth()] + ' ' + now.getFullYear();
+  initMesHist();
+  const mes = document.getElementById('mesHist').value;
   const list = document.getElementById('histList');
   const countEl = document.getElementById('histCount');
 
   list.innerHTML = '<div style="text-align:center;padding:24px;color:var(--muted);font-size:13px">Cargando…</div>';
 
-  const gastos = await fetchGastosApp();
-  const filtered = gastos.filter(r => normalizarMesApp(r.mesImputado) === mesActual);
+  const url = localStorage.getItem('scriptUrl');
+  if (!url) {
+    list.innerHTML = '<div class="empty-state"><div class="icon">⚙️</div><p>Configurá la URL del script<br>en la pestaña Config.</p></div>';
+    return;
+  }
 
+  let gastos = [];
+  try {
+    const res = await fetch(url + '?action=getGastos&t=' + Date.now());
+    const data = await res.json();
+    gastos = data.gastos || [];
+  } catch(e) {
+    list.innerHTML = '<div class="empty-state"><div class="icon">⚠️</div><p>Error al cargar. Verificá tu conexión.</p></div>';
+    return;
+  }
+
+  const filtered = gastos.filter(r => normalizarMesApp(r.mesImputado) === mes);
   countEl.textContent = filtered.length + ' registros';
 
   if (!filtered.length) {
-    list.innerHTML = `<div class="empty-state"><div class="icon">💸</div><p>No hay gastos registrados<br>para este mes todavía.</p></div>`;
+    list.innerHTML = `<div class="empty-state"><div class="icon">💸</div><p>No hay gastos registrados<br>para ${mes}.</p></div>`;
     return;
   }
 
@@ -721,7 +733,6 @@ async function renderHist() {
     const tipoSlug = slug(r.tipo || 'comun');
     const cuotasTxt = r.cuotas > 1 ? ` · ${r.cuotas} ctas` : '';
     const catTxt = r.subcategoria ? `${esc(r.categoria)} › ${esc(r.subcategoria)}` : esc(r.categoria||'');
-    const rowId = r.id || r.concepto + '_' + idx;
     return `<div class="card" id="card-${idx}">
       <div class="card-dot dot-${tipoSlug}"></div>
       <div class="card-body">
@@ -733,40 +744,29 @@ async function renderHist() {
       <div class="card-right">
         <div class="card-amount">$${fmtNum(r.monto)}</div>
         <div class="card-who">${esc(r.pagadoPor)}</div>
-        <button onclick="borrarGasto(${idx}, '${esc(r.concepto)}')" style="
-          margin-top:6px; background:none; border:1px solid #fca5a5;
-          border-radius:8px; color:#ef4444; font-size:11px; font-weight:600;
-          padding:3px 8px; cursor:pointer; font-family:'DM Sans',sans-serif;">
-          🗑 Borrar
-        </button>
+        <button onclick="borrarGasto(${idx}, '${esc(r.concepto)}', '${esc(String(r.monto))}')" style="margin-top:6px;background:none;border:1px solid #fca5a5;border-radius:8px;color:#ef4444;font-size:11px;font-weight:600;padding:3px 8px;cursor:pointer;font-family:'DM Sans',sans-serif;">🗑 Borrar</button>
       </div>
     </div>`;
   }).join('');
 }
 
-async function borrarGasto(idx, concepto) {
+async function borrarGasto(idx, concepto, monto) {
   if (!confirm(`¿Borrar "${concepto}"?\n\nEsto lo elimina del Google Sheet.`)) return;
 
   const url = localStorage.getItem('scriptUrl');
-  if (url && _gastosCache) {
-    const registro = _gastosCache.filter(r => normalizarMesApp(r.mesImputado) === MESES[new Date().getMonth()] + ' ' + new Date().getFullYear())[idx];
-    if (registro) {
-      try {
-        await fetch(url, {
-          method: 'POST', mode: 'no-cors',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'deleteGasto', concepto: registro.concepto, fecha: registro.fecha, monto: registro.monto })
-        });
-      } catch(e) {}
-    }
+  if (url) {
+    try {
+      await fetch(url, {
+        method: 'POST', mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'deleteGasto', concepto, monto })
+      });
+    } catch(e) {}
   }
 
-  // Invalidar cache y rerenderizar
-  _gastosCache = null;
   const card = document.getElementById('card-' + idx);
-  if (card) { card.style.opacity = '0'; card.style.transition = 'opacity .3s'; setTimeout(() => renderHist(), 300); }
+  if (card) { card.style.opacity='0'; card.style.transition='opacity .3s'; setTimeout(()=>renderHist(),350); }
   else renderHist();
-
   showToast('Gasto eliminado');
 }
 
