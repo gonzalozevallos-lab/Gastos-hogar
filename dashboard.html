@@ -476,9 +476,11 @@ async function saveIng(mes,g,e) {
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({action:'saveIngresos', mes, g:parseFloat(g)||0, e:parseFloat(e)||0})
   });
-  // Actualizar cache local
-  if (!_ingCache) _ingCache = {};
-  _ingCache[mes] = {g:parseFloat(g)||0, e:parseFloat(e)||0};
+  // Esperar un momento para que el Sheet procese
+  await new Promise(resolve => setTimeout(resolve, 1500));
+  // Limpiar caché y recargar desde el Sheet
+  _ingCache = null;
+  await fetchIngresos();
 }
 function parseMes(str) { const p=str.split(' '); const i=MESES.indexOf(p[0]); return {m:i>=0?i:0,y:parseInt(p[1])||2000}; }
 function ordenarMeses(meses) { return [...meses].sort((a,b)=>{ const pa=parseMes(a),pb=parseMes(b); return (pb.y*12+pb.m)-(pa.y*12+pa.m); }); }
@@ -830,9 +832,13 @@ async function loadAnual() {
 }
 
 // ════════ INGRESOS ════════
-function loadIngresos() {
+async function loadIngresos() {
   const mes = document.getElementById('mesIngresos').value;
   const el  = document.getElementById('ingresosContent');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div>Cargando…</div>';
+
+  // Asegurar que los ingresos estén cargados
+  await fetchIngresos();
   const ing = getIng(mes);
 
   el.innerHTML = `
@@ -875,10 +881,16 @@ function loadIngresos() {
 async function guardarIngresos(mes) {
   const g=parseFloat(document.getElementById('ingG').value)||0;
   const e=parseFloat(document.getElementById('ingE').value)||0;
+  const btn = document.querySelector('.btn-guardar');
+  if (btn) { btn.disabled=true; btn.textContent='Guardando…'; }
+
   await saveIng(mes,g,e);
-  invalidateCache();
+
+  // Invalidar caché de gastos para que el resumen recalcule
+  _cache = null;
   showToast('Ingresos guardados ✓');
-  renderIngHistorial();
+  // Recargar la vista de ingresos para mostrar los valores actualizados
+  await loadIngresos();
 }
 
 function renderIngHistorial() {
