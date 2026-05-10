@@ -645,7 +645,7 @@ async function enviarGasto() {
   hist.unshift({ ...registro, id: Date.now() });
   localStorage.setItem('gastosHist', JSON.stringify(hist));
 
-  // Enviar a Sheets
+  // Enviar a Sheets via GET con parámetros (más compatible con Android)
   const url = localStorage.getItem('scriptUrl');
   const btn = document.getElementById('btnSubmit');
   btn.disabled = true; btn.textContent = 'Enviando…';
@@ -653,10 +653,20 @@ async function enviarGasto() {
   let ok = false;
   if (url) {
     try {
-      await fetch(url, {
-        method: 'POST', mode: 'no-cors',
-        body: JSON.stringify(registro)
+      const params = new URLSearchParams({
+        action: 'addGasto',
+        fecha: registro.fecha,
+        monto: registro.monto,
+        concepto: registro.concepto,
+        categoria: registro.categoria,
+        subcategoria: registro.subcategoria,
+        medio: registro.medio,
+        pagadoPor: registro.pagadoPor,
+        tipo: registro.tipo,
+        mesImputado: registro.mesImputado,
+        cuotas: registro.cuotas
       });
+      await fetch(url + '?' + params.toString(), { mode: 'no-cors' });
       ok = true;
     } catch(e) {}
   }
