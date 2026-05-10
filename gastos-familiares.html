@@ -611,6 +611,10 @@ function setTipo(t) {
 }
 
 // ════════ ENVIAR ════════
+function getHist() {
+  try { return JSON.parse(localStorage.getItem('gastosHist') || '[]'); } catch { return []; }
+}
+
 async function enviarGasto() {
   const fechaVal  = document.getElementById('fecha').value;
   const monto     = parseFloat(document.getElementById('monto').value);
