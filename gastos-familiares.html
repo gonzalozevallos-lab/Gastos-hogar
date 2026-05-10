@@ -653,10 +653,11 @@ async function enviarGasto() {
   let ok = false;
   if (url) {
     try {
+      const formData = new FormData();
+      formData.append('data', JSON.stringify(registro));
       await fetch(url, {
         method: 'POST', mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(registro)
+        body: formData
       });
       ok = true;
     } catch(e) {}
